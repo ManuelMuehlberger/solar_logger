@@ -1,0 +1,14 @@
+# config.toml
+[global]
+port  = "/dev/ttyUSB2"
+baud_rate = 9600
+timeout = 10
+polling_rate = 1
+
+[meters.SDM72D_1]
+name = "SDM72D_M_1"
+modbus_address = 1
+
+[meters.SDM72D_2]
+name = "SDM72D_M_2"
+modbus_address = 2

@@ -1,0 +1,1 @@
+/Users/manu/Documents/Privat/Privat/solarmeter/backend/target/debug/solarmeter: /Users/manu/Documents/Privat/Privat/solarmeter/backend/src/config.rs /Users/manu/Documents/Privat/Privat/solarmeter/backend/src/main.rs
