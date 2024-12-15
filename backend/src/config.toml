@@ -1,14 +1,24 @@
-# config.toml
 [global]
-port  = "/dev/ttyUSB2"
+port = "/dev/ttyUSB2"
 baud_rate = 9600
 timeout = 10
 polling_rate = 1
+database_url = "/Users/manu/Documents/Privat/Privat/solarmeter/db/solar_db.db"
 
 [meters.SDM72D_1]
 name = "SDM72D_M_1"
+type = "sdm72d"
 modbus_address = 1
 
 [meters.SDM72D_2]
 name = "SDM72D_M_2"
+type = "sdm72d"
 modbus_address = 2
+
+[meters.mock_meter]
+name = "Mock_Solar_1"
+type = "mock"
+modbus_address = 3
+min_power = -5000.0
+max_power = 5000.0
+power_variation = 500.0
