@@ -10,7 +10,10 @@ use crate::meters::create_meter;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfig::from_file("/Users/manu/Documents/Privat/Privat/solarmeter/backend/src/config.toml")?;
-    let db_sync = DatabaseSync::new(&config.global.database_url)?;
+    let db_sync = DatabaseSync::new(
+        &config.global.database_url,
+        config.global.create_database
+    )?;
     
     let meters: Vec<_> = config.meters.iter().map(|(_, meter_config)| {
         create_meter(

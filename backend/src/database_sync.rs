@@ -1,6 +1,9 @@
 use rusqlite::{Connection, params};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
+use std::fs;
+use std::path::Path;
+
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Model {
@@ -18,23 +21,41 @@ pub struct DatabaseSync {
 }
 
 impl DatabaseSync {
-    pub fn new(database_url: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(database_url: &str, create_database: bool) -> Result<Self, Box<dyn std::error::Error>> {
+        // Check if database file exists
+        if !Path::new(database_url).exists() {
+            if !create_database {
+                return Err("Database does not exist and create_database is set to false"
+                    .into());
+            }
+            println!("Database not found! Creating one...");
+            // Create directory structure if create_database is true
+            if let Some(parent) = Path::new(database_url).parent() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+
         let conn = Connection::open(database_url)?;
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS meter_readings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                meter_name TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                total_power REAL NOT NULL,
-                import_power REAL NOT NULL,
-                export_power REAL NOT NULL,
-                total_kwh REAL NOT NULL
-            )",
-            [],
-        )?;
+        
+        if create_database {
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS meter_readings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    meter_name TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    total_power REAL NOT NULL,
+                    import_power REAL NOT NULL,
+                    export_power REAL NOT NULL,
+                    total_kwh REAL NOT NULL
+                )",
+                [],
+            )?;
+        }
+
         Ok(Self { conn })
     }
 
+    
     pub fn insert_meter_reading(&self, reading: &Model) -> Result<(), Box<dyn std::error::Error>> {
         self.conn.execute(
             "INSERT INTO meter_readings 
