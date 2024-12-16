@@ -1,3 +1,4 @@
+// src/meters/sdm72d.rs
 use tokio_modbus::prelude::*;
 use tokio_serial::SerialStream;
 use std::time::Duration;
@@ -5,21 +6,16 @@ use async_trait::async_trait;
 use super::MeterReader;
 use crate::database_sync::Model;
 use chrono::Utc;
+use anyhow::{Context, Result, Error};
 
-pub mod registers {
-    // Input Registers
-    pub const TOTAL_POWER: u16 = 0x0034;     // Total system power (W)
-    pub const IMPORT_ENERGY: u16 = 0x0048;   // Import Wh since last reset (kWh)
-    pub const EXPORT_ENERGY: u16 = 0x004A;   // Export Wh since last reset (kWh)
-    pub const TOTAL_KWH: u16 = 0x0156;       // Total kWh
-    pub const IMPORT_POWER: u16 = 0x0500;    // Import power (W)
-    pub const EXPORT_POWER: u16 = 0x0502;    // Export power (W)
-
-    // not used
-    pub const MODBUS_ADDRESS: u16 = 0x0014;  // Device Modbus address
-    pub const BAUD_RATE: u16 = 0x001C;       // Communication baud rate
+#[allow(dead_code)]
+mod registers {
+    pub const TOTAL_POWER: u16 = 0x34;      // Total system power (W)
+    pub const IMPORT_POWER: u16 = 0x500;    // Import power (W)
+    pub const EXPORT_POWER: u16 = 0x502;    // Export power (W)
+    pub const TOTAL_ENERGY: u16 = 0x156;    // Total energy (kWh)
 }
-
+ 
 pub struct SDM72DMeter {
     name: String,
     port: String,
@@ -51,7 +47,7 @@ impl SDM72DMeter {
         f32::from_be_bytes(bytes)
     }
 
-    async fn ensure_connected(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn ensure_connected(&mut self) -> Result<(), Error> {
         if self.ctx.is_none() {
             let builder = tokio_serial::new(&self.port, self.baud_rate)
                 .data_bits(tokio_serial::DataBits::Eight)
@@ -59,48 +55,65 @@ impl SDM72DMeter {
                 .parity(tokio_serial::Parity::None)
                 .timeout(self.timeout);
 
-            let serial = SerialStream::open(&builder)?;
+            let serial = SerialStream::open(&builder)
+                .context(format!("Failed to open serial port {}", self.port))?;
+
             self.ctx = Some(rtu::attach_slave(serial, Slave(self.modbus_address)));
         }
         Ok(())
     }
 
-    async fn read_float_register(&mut self, address: u16) -> Result<f32, Box<dyn std::error::Error>> {
+    async fn read_float_register(&mut self, address: u16) -> Result<f32, Error> {
         self.ensure_connected().await?;
         
         if let Some(ctx) = &mut self.ctx {
-            let registers = ctx.read_input_registers(address, 2).await?;
+            let registers = ctx.read_input_registers(address, 2)
+                .await
+                .context(format!("Failed to read registers at address {:#04x}", address))?;
+
             if registers.clone()?.len() < 2 {
-                return Err(format!("Expected 2 registers, got {}", registers?.len()).into());
+                anyhow::bail!("Expected 2 registers, got {}", registers?.len());
             }
+
             Ok(Self::registers_to_f32(&registers?[0..2]))
         } else {
-            Err("Context not initialized".into())
+            anyhow::bail!("Modbus context not initialized")
         }
     }
 }
 
+
 #[async_trait]
 impl MeterReader for SDM72DMeter {
-    async fn get_value(&mut self) -> Result<Model, Box<dyn std::error::Error>> {
-        // Read all required registers
-        let total_power = self.read_float_register(registers::TOTAL_POWER).await?;
-        let import_power = self.read_float_register(registers::IMPORT_POWER).await?;
-        let export_power = self.read_float_register(registers::EXPORT_POWER).await?;
-        let total_kwh = self.read_float_register(registers::TOTAL_KWH).await?;
+    async fn get_value(&mut self) -> Result<Model, Error> {
+        let total_power = self.read_float_register(0x34)
+            .await
+            .context("Failed to read total power")?;
+
+        let import_power = self.read_float_register(0x500)
+            .await
+            .context("Failed to read import power")?;
+
+        let export_power = self.read_float_register(0x502)
+            .await
+            .context("Failed to read export power")?;
+
+        let total_kwh = self.read_float_register(0x156)
+            .await
+            .context("Failed to read total energy")?;
 
         Ok(Model {
             id: 0,
             meter_name: self.name.clone(),
             timestamp: Utc::now(),
-            total_power: total_power as f32,
-            import_power: import_power as f32,
-            export_power: export_power as f32,
-            total_kwh: total_kwh as f32,
+            total_power,
+            import_power,
+            export_power,
+            total_kwh,
         })
     }
 
-    fn get_timeout(&mut self) -> Duration {
+    fn get_timeout(&self) -> Duration {
         self.timeout
     }
 }

@@ -1,7 +1,7 @@
-use chrono::Utc;
 use async_trait::async_trait;
 use super::MeterReader;
 use crate::database_sync::Model;
+use chrono::Utc;
 use std::time::Duration;
 
 pub struct MockMeter {
@@ -22,9 +22,8 @@ impl MockMeter {
 
 #[async_trait]
 impl MeterReader for MockMeter {
-    async fn get_value(&mut self) -> Result<Model, Box<dyn std::error::Error>> {
+    async fn get_value(&mut self) -> anyhow::Result<Model> {
         let now = Utc::now();
-        // Generate a simple sine wave pattern for power simulation
         let total_power = (now.timestamp() as f32 / 3600.0).sin() * 1000.0;
         
         if let Some(last_update) = self.last_update {
@@ -44,7 +43,7 @@ impl MeterReader for MockMeter {
         })
     }
 
-    fn get_timeout(&mut self) -> Duration {
+    fn get_timeout(&self) -> Duration {
         Duration::from_secs(5)
     }
 }

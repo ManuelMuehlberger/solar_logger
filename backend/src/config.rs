@@ -8,6 +8,8 @@ pub struct GlobalConfig {
     pub database_url: String,
     #[serde(default = "default_create_database")]
     pub create_database: bool,
+    pub health_check_port: Option<u16>,
+    pub log_level: Option<String>,
 }
 
 fn default_create_database() -> bool {

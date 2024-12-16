@@ -1,6 +1,7 @@
 use async_trait::async_trait;
-use crate::database_sync::Model;
+use anyhow::{Result, Error};
 use std::time::Duration;
+use crate::database_sync::Model;
 
 mod mock_meter;
 mod sdm72d;
@@ -9,9 +10,9 @@ pub use mock_meter::MockMeter;
 pub use sdm72d::SDM72DMeter;
 
 #[async_trait]
-pub trait MeterReader {
-    async fn get_value(&mut self) -> Result<Model, Box<dyn std::error::Error>>;
-    fn get_timeout(&mut self) -> Duration;
+pub trait MeterReader: Send {
+    async fn get_value(&mut self) -> Result<Model, Error>;
+    fn get_timeout(&self) -> Duration;
 }
 
 pub fn create_meter(
@@ -25,8 +26,18 @@ pub fn create_meter(
 ) -> Box<dyn MeterReader> {
     match meter_type {
         crate::config::MeterType::Sdm72d => {
-            Box::new(SDM72DMeter::new(name, port, baud_rate, modbus_address, timeout))
+            Box::new(SDM72DMeter::new(
+                name,
+                port,
+                baud_rate,
+                modbus_address,
+                timeout,
+            ))
         }
-        crate::config::MeterType::Mock => Box::new(MockMeter::new(name)),
+        crate::config::MeterType::Mock => {
+            Box::new(MockMeter::new(
+            name,
+        ))
+    }
     }
 }
