@@ -30,11 +30,7 @@ pub struct MeterConfig {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum MeterType {
     Sdm72d,
-    Mock {
-        min_power: f32,
-        max_power: f32,
-        power_variation: f32,
-    },
+    Mock,
 }
 
 #[derive(Debug, Deserialize)]

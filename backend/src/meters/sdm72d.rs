@@ -6,30 +6,41 @@ use super::MeterReader;
 use crate::database_sync::Model;
 use chrono::Utc;
 
+pub mod registers {
+    // Input Registers
+    pub const TOTAL_POWER: u16 = 0x0034;     // Total system power (W)
+    pub const IMPORT_ENERGY: u16 = 0x0048;   // Import Wh since last reset (kWh)
+    pub const EXPORT_ENERGY: u16 = 0x004A;   // Export Wh since last reset (kWh)
+    pub const TOTAL_KWH: u16 = 0x0156;       // Total kWh
+    pub const IMPORT_POWER: u16 = 0x0500;    // Import power (W)
+    pub const EXPORT_POWER: u16 = 0x0502;    // Export power (W)
+
+    // not used
+    pub const MODBUS_ADDRESS: u16 = 0x0014;  // Device Modbus address
+    pub const BAUD_RATE: u16 = 0x001C;       // Communication baud rate
+}
+
 pub struct SDM72DMeter {
     name: String,
     port: String,
     baud_rate: u32,
-    polling_rate: u32,
     modbus_address: u8,
     timeout: Duration,
     ctx: Option<tokio_modbus::client::Context>,
 }
 
 impl SDM72DMeter {
-    pub fn new(name: String, port: String, baud_rate: u32, polling_rate: u32, modbus_address: u8, timeout: u32) -> Self {
+    pub fn new(name: String, port: String, baud_rate: u32, modbus_address: u8, timeout: u32) -> Self {
         Self {
             name,
             port,
             baud_rate,
-            polling_rate,
             modbus_address,
             timeout: Duration::from_secs(timeout.into()),
             ctx: None,
         }
     }
 
-    // Convert two 16-bit registers to f32 using big endian format
     fn registers_to_f32(regs: &[u16]) -> f32 {
         let bytes = [
             (regs[0] >> 8) as u8,
@@ -73,10 +84,10 @@ impl SDM72DMeter {
 impl MeterReader for SDM72DMeter {
     async fn get_value(&mut self) -> Result<Model, Box<dyn std::error::Error>> {
         // Read all required registers
-        let total_power = self.read_float_register(0x34).await?;
-        let import_power = self.read_float_register(0x500).await?;
-        let export_power = self.read_float_register(0x502).await?;
-        let total_kwh = self.read_float_register(0x156).await?;
+        let total_power = self.read_float_register(registers::TOTAL_POWER).await?;
+        let import_power = self.read_float_register(registers::IMPORT_POWER).await?;
+        let export_power = self.read_float_register(registers::EXPORT_POWER).await?;
+        let total_kwh = self.read_float_register(registers::TOTAL_KWH).await?;
 
         Ok(Model {
             id: 0,

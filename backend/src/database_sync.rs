@@ -22,7 +22,6 @@ pub struct DatabaseSync {
 
 impl DatabaseSync {
     pub fn new(database_url: &str, create_database: bool) -> Result<Self, Box<dyn std::error::Error>> {
-        // Ensure parent directory exists
         if let Some(parent) = Path::new(database_url).parent() {
             fs::create_dir_all(parent)?;
         }
@@ -44,7 +43,6 @@ impl DatabaseSync {
                 [],
             )?;
 
-            // Add indices for better query performance
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_meter_timestamp 
                  ON meter_readings (meter_name, timestamp)",
@@ -52,9 +50,7 @@ impl DatabaseSync {
             )?;
         }
 
-        Ok(Self { 
-            conn: Mutex::new(conn)
-        })
+        Ok(Self { conn: Mutex::new(conn) })
     }
 
     pub fn insert_meter_reading(&self, reading: &Model) -> Result<(), Box<dyn std::error::Error>> {
@@ -83,9 +79,7 @@ impl DatabaseSync {
     ) -> Result<Vec<Model>, Box<dyn std::error::Error>> {
         let conn = self.conn.lock().unwrap();
         let mut query = String::from(
-            "SELECT id, meter_name, timestamp, total_power, import_power, export_power, total_kwh 
-             FROM meter_readings 
-             WHERE meter_name = ?"
+            "SELECT * FROM meter_readings WHERE meter_name = ?"
         );
         
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(meter_name)];
