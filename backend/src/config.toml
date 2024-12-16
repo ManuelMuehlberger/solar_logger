@@ -1,13 +1,13 @@
 [global]
-port = "/dev/ttyUSB2"
-baud_rate = 9600
-timeout = 10
-polling_rate = 1
-database_url = "/Users/manu/Documents/Privat/Privat/solarmeter/db/solar_db.db"
+database_url = "/home/manu/solarmeter/db/solar_db.db"
 create_database = true
 
 [meters.SDM72D_1]
 name = "SDM72D_M_1"
+port = "/dev/ttyACM0"
+baud_rate = 9600
+timeout = 10
+polling_rate = 1
 type = "sdm72d"
 modbus_address = 1
 

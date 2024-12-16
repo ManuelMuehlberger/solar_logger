@@ -5,10 +5,6 @@ use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 pub struct GlobalConfig {
-    pub port: String,
-    pub baud_rate: u32,
-    pub timeout: u32,
-    pub polling_rate: u64,
     pub database_url: String,
     #[serde(default = "default_create_database")]
     pub create_database: bool,
@@ -21,6 +17,10 @@ fn default_create_database() -> bool {
 #[derive(Debug, Deserialize)]
 pub struct MeterConfig {
     pub name: String,
+    pub port: String,
+    pub baud_rate: u32,
+    pub timeout: u32,
+    pub polling_rate: u32,
     pub modbus_address: u8,
     #[serde(flatten)]
     pub meter_type: MeterType,

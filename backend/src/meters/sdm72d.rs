@@ -8,17 +8,21 @@ use chrono::Utc;
 
 pub struct SDM72DMeter {
     name: String,
+    port: String,
     baud_rate: u32,
+    polling_rate: u32,
     modbus_address: u8,
     timeout: Duration,
     ctx: Option<tokio_modbus::client::Context>,
 }
 
 impl SDM72DMeter {
-    pub fn new(name: String, baud_rate: u32, modbus_address: u8, timeout: u32) -> Self {
+    pub fn new(name: String, port: String, baud_rate: u32, polling_rate: u32, modbus_address: u8, timeout: u32) -> Self {
         Self {
             name,
+            port,
             baud_rate,
+            polling_rate,
             modbus_address,
             timeout: Duration::from_secs(timeout.into()),
             ctx: None,
@@ -38,7 +42,7 @@ impl SDM72DMeter {
 
     async fn ensure_connected(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.ctx.is_none() {
-            let builder = tokio_serial::new("/dev/ttyACM0", self.baud_rate)
+            let builder = tokio_serial::new(&self.port, self.baud_rate)
                 .data_bits(tokio_serial::DataBits::Eight)
                 .stop_bits(tokio_serial::StopBits::One)
                 .parity(tokio_serial::Parity::None)
@@ -83,5 +87,9 @@ impl MeterReader for SDM72DMeter {
             export_power: export_power as f32,
             total_kwh: total_kwh as f32,
         })
+    }
+
+    fn get_timeout(&mut self) -> Duration {
+        self.timeout
     }
 }

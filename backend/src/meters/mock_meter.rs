@@ -3,6 +3,8 @@ use rand::Rng;
 use async_trait::async_trait;
 use super::MeterReader;
 use crate::database_sync::Model;
+use std::time::Duration;
+
 
 pub struct MockMeter {
     name: String,
@@ -58,5 +60,9 @@ impl MeterReader for MockMeter {
             export_power,
             total_kwh: self.kwh_accumulator,
         })
+    }
+
+    fn get_timeout(&mut self) -> Duration {
+        Duration::new(5, 0)
     }
 }

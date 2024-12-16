@@ -27,9 +27,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let meter = create_meter(
             meter_config.name.clone(),
             meter_config.meter_type.clone(),
-            config.global.baud_rate,
+            meter_config.port.clone(),
+            meter_config.baud_rate,
+            meter_config.polling_rate,
             meter_config.modbus_address,
-            config.global.timeout,
+            meter_config.timeout,
         );
         meters.push(meter);
     }
@@ -49,7 +51,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("Error reading meter: {}", e);
                 }
             }
+            sleep(meter.get_timeout()).await;
         }
-        sleep(Duration::from_secs(config.global.polling_rate)).await;
+        
+        
     }
 }
