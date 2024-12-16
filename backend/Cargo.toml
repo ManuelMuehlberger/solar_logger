@@ -6,11 +6,14 @@ edition = "2021"  # Add this to use async fn in main
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
-serialport = "4.0"  # For Modbus RS485 RTU communication
+#serialport = "4.0"  # For Modbus RS485 RTU communication
 #tokio = { version = "1", features = ["full"] }
 #tokio-modbus = { version = "0.16", features = ["rtu"] }
 rusqlite = { version = "0.32.1", features = ["bundled"] }
-
+tokio = { version = "1.42.0", features = ["full"] }
+tokio-modbus = { version = "0.16.1", features = ["rtu"] }
+tokio-serial = "5.4.4"
+async-trait = "0.1"
 # Additional useful dependencies
 #anyhow = "1.0"
 chrono = { version = "0.4.39", features = ["serde"] }
