@@ -1,48 +1,62 @@
 use chrono::Utc;
 use rand::Rng;
+use async_trait::async_trait;
 use super::MeterReader;
 use crate::database_sync::Model;
 
 pub struct MockMeter {
     name: String,
-    min_power: f64,
-    max_power: f64,
-    power_variation: f64,
-    kwh_accumulator: f64,
+    min_power: f32,
+    max_power: f32,
+    power_variation: f32,
+    kwh_accumulator: f32,
+    last_update: Option<chrono::DateTime<Utc>>,
 }
 
 impl MockMeter {
-    pub fn new(name: String, min_power: f64, max_power: f64, power_variation: f64) -> Self {
+    pub fn new(name: String, min_power: f32, max_power: f32, power_variation: f32) -> Self {
         Self {
             name,
             min_power,
             max_power,
             power_variation,
             kwh_accumulator: 0.0,
+            last_update: None,
         }
     }
 
-    fn generate_power(&self) -> f64 {
+    fn generate_power(&self) -> f32 {
         let mut rng = rand::thread_rng();
         let base = rng.gen_range(self.min_power..=self.max_power);
         base + (rng.gen_range(-self.power_variation..=self.power_variation))
     }
 }
 
+#[async_trait]
 impl MeterReader for MockMeter {
-    fn get_value(&self) -> Result<Model, Box<dyn std::error::Error>> {
+    async fn get_value(&mut self) -> Result<Model, Box<dyn std::error::Error>> {
+        let now = Utc::now();
         let total_power = self.generate_power();
+        
+        // Update kwh accumulator based on time elapsed
+        if let Some(last_update) = self.last_update {
+            let duration = now.signed_duration_since(last_update);
+            let hours = duration.num_milliseconds() as f32 / (1000.0 * 3600.0);
+            self.kwh_accumulator += total_power * hours;
+        }
+        self.last_update = Some(now);
+
         let import_power = if total_power > 0.0 { total_power } else { 0.0 };
         let export_power = if total_power < 0.0 { -total_power } else { 0.0 };
-        let kwh_delta = total_power / 3600.0;
+        
         Ok(Model {
             id: 0,
             meter_name: self.name.clone(),
-            timestamp: Utc::now(),
+            timestamp: now,
             total_power,
             import_power,
             export_power,
-            total_kwh: self.kwh_accumulator + kwh_delta,
+            total_kwh: self.kwh_accumulator,
         })
     }
 }

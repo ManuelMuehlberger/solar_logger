@@ -31,9 +31,9 @@ pub struct MeterConfig {
 pub enum MeterType {
     Sdm72d,
     Mock {
-        min_power: f64,
-        max_power: f64,
-        power_variation: f64,
+        min_power: f32,
+        max_power: f32,
+        power_variation: f32,
     },
 }
 

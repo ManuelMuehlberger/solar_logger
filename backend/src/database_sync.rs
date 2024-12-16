@@ -3,36 +3,28 @@ use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use std::fs;
 use std::path::Path;
-
+use std::sync::Mutex;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Model {
     pub id: i32,
     pub meter_name: String,
     pub timestamp: DateTime<Utc>,
-    pub total_power: f64,
-    pub import_power: f64,
-    pub export_power: f64,
-    pub total_kwh: f64,
+    pub total_power: f32,
+    pub import_power: f32,
+    pub export_power: f32,
+    pub total_kwh: f32,
 }
 
 pub struct DatabaseSync {
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
 impl DatabaseSync {
     pub fn new(database_url: &str, create_database: bool) -> Result<Self, Box<dyn std::error::Error>> {
-        // Check if database file exists
-        if !Path::new(database_url).exists() {
-            if !create_database {
-                return Err("Database does not exist and create_database is set to false"
-                    .into());
-            }
-            println!("Database not found! Creating one...");
-            // Create directory structure if create_database is true
-            if let Some(parent) = Path::new(database_url).parent() {
-                fs::create_dir_all(parent)?;
-            }
+        // Ensure parent directory exists
+        if let Some(parent) = Path::new(database_url).parent() {
+            fs::create_dir_all(parent)?;
         }
 
         let conn = Connection::open(database_url)?;
@@ -46,19 +38,29 @@ impl DatabaseSync {
                     total_power REAL NOT NULL,
                     import_power REAL NOT NULL,
                     export_power REAL NOT NULL,
-                    total_kwh REAL NOT NULL
+                    total_kwh REAL NOT NULL,
+                    UNIQUE(meter_name, timestamp)
                 )",
+                [],
+            )?;
+
+            // Add indices for better query performance
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_meter_timestamp 
+                 ON meter_readings (meter_name, timestamp)",
                 [],
             )?;
         }
 
-        Ok(Self { conn })
+        Ok(Self { 
+            conn: Mutex::new(conn)
+        })
     }
 
-    
     pub fn insert_meter_reading(&self, reading: &Model) -> Result<(), Box<dyn std::error::Error>> {
-        self.conn.execute(
-            "INSERT INTO meter_readings 
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO meter_readings 
             (meter_name, timestamp, total_power, import_power, export_power, total_kwh)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
@@ -73,15 +75,37 @@ impl DatabaseSync {
         Ok(())
     }
 
-    pub fn get_meter_readings(&self, meter_name: &str) -> Result<Vec<Model>, Box<dyn std::error::Error>> {
-        let mut stmt = self.conn.prepare(
+    pub fn get_meter_readings(
+        &self,
+        meter_name: &str,
+        start_time: Option<DateTime<Utc>>,
+        end_time: Option<DateTime<Utc>>,
+    ) -> Result<Vec<Model>, Box<dyn std::error::Error>> {
+        let conn = self.conn.lock().unwrap();
+        let mut query = String::from(
             "SELECT id, meter_name, timestamp, total_power, import_power, export_power, total_kwh 
              FROM meter_readings 
-             WHERE meter_name = ?1 
-             ORDER BY timestamp DESC"
-        )?;
-
-        let readings = stmt.query_map([meter_name], |row| {
+             WHERE meter_name = ?"
+        );
+        
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(meter_name)];
+        
+        if let Some(start) = start_time {
+            query.push_str(" AND timestamp >= ?");
+            params.push(Box::new(start.to_rfc3339()));
+        }
+        
+        if let Some(end) = end_time {
+            query.push_str(" AND timestamp <= ?");
+            params.push(Box::new(end.to_rfc3339()));
+        }
+        
+        query.push_str(" ORDER BY timestamp DESC");
+        
+        let mut stmt = conn.prepare(&query)?;
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        
+        let readings = stmt.query_map(param_refs.as_slice(), |row| {
             Ok(Model {
                 id: row.get(0)?,
                 meter_name: row.get(1)?,

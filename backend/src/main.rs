@@ -2,33 +2,43 @@ mod config;
 mod database_sync;
 mod meters;
 
-use std::thread;
-use std::time::Duration;
+use tokio::time::{sleep, Duration};
 use crate::database_sync::DatabaseSync;
 use crate::config::AppConfig;
 use crate::meters::create_meter;
+use std::sync::Arc;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = AppConfig::from_file("/Users/manu/Documents/Privat/Privat/solarmeter/backend/src/config.toml")?;
-    let db_sync = DatabaseSync::new(
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load configuration
+    let config = AppConfig::from_file("src/config.toml")?;
+    println!("Configuration loaded successfully");
+
+    // Initialize database
+    let db_sync = Arc::new(DatabaseSync::new(
         &config.global.database_url,
         config.global.create_database
-    )?;
-    
-    let meters: Vec<_> = config.meters.iter().map(|(_, meter_config)| {
-        create_meter(
+    )?);
+    println!("Database initialized");
+
+    // Create meters
+    let mut meters = Vec::new();
+    for (_, meter_config) in &config.meters {
+        let meter = create_meter(
             meter_config.name.clone(),
             meter_config.meter_type.clone(),
             config.global.baud_rate,
             meter_config.modbus_address,
             config.global.timeout,
-        )
-    }).collect();
+        );
+        meters.push(meter);
+    }
+    println!("Created {} meters", meters.len());
 
     println!("Starting meter reading loop");
     loop {
-        for meter in &meters {
-            match meter.get_value() {
+        for meter in &mut meters {
+            match meter.get_value().await {
                 Ok(reading) => {
                     println!("Reading from {}: {:?}", reading.meter_name, reading);
                     if let Err(e) = db_sync.insert_meter_reading(&reading) {
@@ -40,6 +50,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        thread::sleep(Duration::from_secs(config.global.polling_rate));
+        sleep(Duration::from_secs(config.global.polling_rate)).await;
     }
 }
