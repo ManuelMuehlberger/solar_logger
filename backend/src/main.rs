@@ -120,7 +120,7 @@ async fn health_check(port: u16) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    initialize_logging("/var/log/solar_meter")?;
+    initialize_logging("~/log/solar_meter")?;
     info!("Starting solar meter monitoring system");
 
     let config = match AppConfig::from_file("src/config.toml") {
@@ -141,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     info!("Database initialized at {}", config.global.database_url);
   
-    let web_server = WebServer::new(Arc::clone(&db_sync));
+    let web_server = WebServer::new(Arc::clone(&db_sync), Some(config.global.bind_address));
     let web_server_port = config.global.web_server_port.unwrap_or(8080);
     task::spawn(web_server.run(web_server_port));
 

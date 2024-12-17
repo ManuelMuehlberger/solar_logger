@@ -11,6 +11,7 @@ pub struct GlobalConfig {
     pub health_check_port: Option<u16>,
     pub log_level: Option<String>,
     pub web_server_port: Option<u16>,
+    pub bind_address: String,
 }
 
 fn default_create_database() -> bool {

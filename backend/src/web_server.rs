@@ -31,13 +31,15 @@ struct MeterStatus {
 pub struct WebServer {
     db: Arc<DatabaseSync>,
     start_time: DateTime<Utc>,
+    bind_address: String,
 }
 
 impl WebServer {
-    pub fn new(db: Arc<DatabaseSync>) -> Self {
+    pub fn new(db: Arc<DatabaseSync>, bind_address: Option<String>) -> Self {
         Self {
             db,
             start_time: Utc::now(),
+            bind_address: bind_address.unwrap_or_else(|| "127.0.0.1".to_string()),
         }
     }
 
@@ -168,8 +170,14 @@ impl WebServer {
 
         let routes = status_route.or(meters_route);
 
+        // Parse the bind address
+        let addr: std::net::IpAddr = self.bind_address.parse()
+            .expect("Invalid bind address");
+
+        println!("Starting web server on {}:{}", addr, port);
+        
         warp::serve(routes)
-            .run(([127, 0, 0, 1], port))
+            .run((addr, port))
             .await;
     }
 }
