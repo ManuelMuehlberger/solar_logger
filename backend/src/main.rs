@@ -140,11 +140,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     info!("Database initialized at {}", config.global.database_url);
+
+    // Create shutdown channel
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
   
-    let web_server = WebServer::new(Arc::clone(&db_sync), Some(config.global.bind_address));
+    let web_server = WebServer::new(
+        Arc::clone(&db_sync), 
+        Some(config.global.bind_address.clone()), 
+        shutdown_tx
+    );
     let web_server_port = config.global.web_server_port.unwrap_or(8080);
     task::spawn(web_server.run(web_server_port));
-
 
     let mut meter_tasks = Vec::new();
     for (meter_id, meter_config) in &config.meters {
@@ -169,11 +175,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     info!("Created {} meter polling tasks", meter_tasks.len());
 
-    match ctrl_c().await {
-        Ok(()) => {
-            info!("Shutdown signal received, stopping gracefully...");
+    tokio::select! {
+        _ = ctrl_c() => {
+            info!("Shutdown signal received from Ctrl+C, stopping gracefully...");
         }
-        Err(e) => error!("Error waiting for shutdown signal: {}", e),
+        _ = shutdown_rx => {
+            info!("Shutdown signal received from web interface, stopping gracefully...");
+        }
     }
 
     Ok(())

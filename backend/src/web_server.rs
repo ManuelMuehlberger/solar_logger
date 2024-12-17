@@ -1,11 +1,13 @@
 use warp::{Filter, Reply};
 use serde::Serialize;
 use std::sync::Arc;
-use log::error;
+use log::{error, info};
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 use std::path::Path;
 use std::convert::Infallible;
+use tokio::sync::oneshot;
+use std::sync::Mutex;
 
 use crate::database_sync::DatabaseSync;
 
@@ -32,14 +34,16 @@ pub struct WebServer {
     db: Arc<DatabaseSync>,
     start_time: DateTime<Utc>,
     bind_address: String,
+    shutdown_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
 }
 
 impl WebServer {
-    pub fn new(db: Arc<DatabaseSync>, bind_address: Option<String>) -> Self {
+    pub fn new(db: Arc<DatabaseSync>, bind_address: Option<String>, shutdown_sender: oneshot::Sender<()>) -> Self {
         Self {
             db,
             start_time: Utc::now(),
             bind_address: bind_address.unwrap_or_else(|| "127.0.0.1".to_string()),
+            shutdown_sender: Arc::new(Mutex::new(Some(shutdown_sender))),
         }
     }
 
@@ -57,6 +61,56 @@ impl WebServer {
                 Ok(timestamp.and_then(|ts| DateTime::parse_from_rfc3339(&ts).ok().map(|dt| dt.with_timezone(&Utc))))
             }
         ).ok().flatten()
+    }
+
+    async fn handle_kill(&self) -> Result<impl Reply, Infallible> {
+        info!("Kill command received, initiating shutdown...");
+        
+        let mut sender_guard = self.shutdown_sender.lock().unwrap();
+        if let Some(sender) = sender_guard.take() {
+            let _ = sender.send(());
+            Ok(warp::reply::html(
+                r#"
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Solar Meter Shutdown</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 40px; }
+                        .message { padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="message">
+                        <h2>Shutdown Initiated</h2>
+                        <p>The solar meter monitoring system is shutting down...</p>
+                    </div>
+                </body>
+                </html>
+                "#
+            ))
+        } else {
+            Ok(warp::reply::html(
+                r#"
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Solar Meter Shutdown Failed</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 40px; }
+                        .message { padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="message">
+                        <h2>Shutdown Failed</h2>
+                        <p>Shutdown has already been initiated or the shutdown mechanism is not available.</p>
+                    </div>
+                </body>
+                </html>
+                "#
+            ))
+        }
     }
 
     async fn handle_status(&self) -> Result<impl Reply, Infallible> {
@@ -168,9 +222,17 @@ impl WebServer {
                 server.handle_meters().await
             });
 
-        let routes = status_route.or(meters_route);
+        let kill_route = warp::path("kill")
+            .and(warp::get())
+            .and(with_server(self.clone()))
+            .and_then(|server: WebServer| async move {
+                server.handle_kill().await
+            });
 
-        // Parse the bind address
+        let routes = status_route
+            .or(meters_route)
+            .or(kill_route);
+
         let addr: std::net::IpAddr = self.bind_address.parse()
             .expect("Invalid bind address");
 
