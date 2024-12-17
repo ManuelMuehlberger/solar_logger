@@ -13,6 +13,7 @@ pub use sdm72d::SDM72DMeter;
 pub trait MeterReader: Send {
     async fn get_value(&mut self) -> Result<Model, Error>;
     fn get_timeout(&self) -> Duration;
+    fn get_polling_rate(&self) -> u32;
 }
 
 pub fn create_meter(
@@ -32,6 +33,7 @@ pub fn create_meter(
                 baud_rate,
                 modbus_address,
                 timeout,
+                polling_rate
             ))
         }
         crate::config::MeterType::Mock => {

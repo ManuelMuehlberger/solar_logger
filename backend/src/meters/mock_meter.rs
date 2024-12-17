@@ -22,6 +22,9 @@ impl MockMeter {
 
 #[async_trait]
 impl MeterReader for MockMeter {
+    fn get_polling_rate(&self) -> u32 {
+        10
+    }
     async fn get_value(&mut self) -> anyhow::Result<Model> {
         let now = Utc::now();
         let total_power = (now.timestamp() as f32 / 3600.0).sin() * 1000.0;

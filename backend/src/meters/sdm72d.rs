@@ -22,16 +22,18 @@ pub struct SDM72DMeter {
     baud_rate: u32,
     modbus_address: u8,
     timeout: Duration,
+    polling_rate: u32,
     ctx: Option<tokio_modbus::client::Context>,
 }
 
 impl SDM72DMeter {
-    pub fn new(name: String, port: String, baud_rate: u32, modbus_address: u8, timeout: u32) -> Self {
+    pub fn new(name: String, port: String, baud_rate: u32, modbus_address: u8, timeout: u32, polling_rate: u32) -> Self {
         Self {
             name,
             port,
             baud_rate,
             modbus_address,
+            polling_rate,
             timeout: Duration::from_secs(timeout.into()),
             ctx: None,
         }
@@ -85,6 +87,10 @@ impl SDM72DMeter {
 
 #[async_trait]
 impl MeterReader for SDM72DMeter {
+    fn get_polling_rate(&self) -> u32 {
+        self.polling_rate
+    }
+
     async fn get_value(&mut self) -> Result<Model, Error> {
         let total_power = self.read_float_register(0x34)
             .await

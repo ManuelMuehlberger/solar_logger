@@ -161,7 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         let db_sync = Arc::clone(&db_sync);
-        let polling_rate = meter_config.polling_rate;
+        let polling_rate = meter.get_polling_rate();
         
         meter_tasks.push(task::spawn(async move {
             handle_meter(meter, db_sync, polling_rate).await;
