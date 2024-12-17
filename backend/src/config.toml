@@ -10,6 +10,7 @@ port = "/dev/ttyACM0"
 baud_rate = 9600
 timeout = 10
 polling_rate = 1
+
 type = "sdm72d"
 modbus_address = 1
 

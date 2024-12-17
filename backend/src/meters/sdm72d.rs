@@ -109,7 +109,7 @@ impl MeterReader for SDM72DMeter {
             .context("Failed to read total energy")?;
 
         Ok(Model {
-            id: 0,
+            //id: 0,
             meter_name: self.name.clone(),
             timestamp: Utc::now(),
             total_power,

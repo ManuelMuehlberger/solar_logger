@@ -36,7 +36,7 @@ impl MeterReader for MockMeter {
         self.last_update = Some(now);
 
         Ok(Model {
-            id: 0,
+            //id: 0,
             meter_name: self.name.clone(),
             timestamp: now,
             total_power,
