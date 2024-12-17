@@ -18,7 +18,18 @@ def get_meter_status():
     except:
         return None
 
-def load_data(start_time=None, end_time=None):
+def load_data(start_time=None, end_time=None, meter_name=None):
+    """
+    Load data from the database with optional filtering by time range and meter name.
+    
+    Args:
+        start_time: Optional datetime for filtering data after this time
+        end_time: Optional datetime for filtering data before this time
+        meter_name: Optional string to filter data for a specific meter
+    
+    Returns:
+        pandas.DataFrame with the requested data
+    """
     conn = sqlite3.connect(DB_PATH)
     
     query = """
@@ -34,6 +45,9 @@ def load_data(start_time=None, end_time=None):
     if end_time:
         query += " AND timestamp <= ?"
         params.append(end_time.isoformat())
+    if meter_name:
+        query += " AND meter_name = ?"
+        params.append(meter_name)
         
     query += " ORDER BY timestamp DESC"
     

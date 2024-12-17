@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
 import pytz
+import dateutil.parser
 from utils.database import (
     get_current_power_usage,
     get_daily_stats,
@@ -21,7 +22,6 @@ st.set_page_config(
 # Render the persistent sidebar
 render_sidebar()
 
-# Rest of your existing Home.py code...
 def render_header():
     col1, col2, col3 = st.columns([2,3,2])
     
@@ -111,13 +111,16 @@ def render_meter_status():
                 meter['meter_name'],
                 f"{meter['last_power_reading']:.1f} W"
             )
-            last_update = datetime.fromisoformat(meter['last_reading_timestamp'].replace('Z', '+00:00'))
-            st.write(f"Last Update: {last_update.strftime('%H:%M:%S')}")
+            try:
+                last_update = dateutil.parser.parse(meter['last_reading_timestamp'])
+                st.write(f"Last Update: {last_update.strftime('%H:%M:%S')}")
+            except Exception as e:
+                st.write("⚠️ Invalid timestamp")
+                st.caption(f"Raw timestamp: {meter['last_reading_timestamp']}")
 
 def main():
     render_header()
     st.markdown("---")
-    
     render_power_metrics()
     st.markdown("---")
     

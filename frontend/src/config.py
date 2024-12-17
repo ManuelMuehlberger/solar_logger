@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 # Backend settings
 BACKEND_URL = "http://localhost:8081"
-DB_PATH = "/Users/manu/Documents/Privat/Privat/solarmeter/db/solar_db.db"
+DB_PATH = "/home/manu/solarmeter/db/solar_db.db"
 
 # Location settings
 LOCATION = {

@@ -52,32 +52,6 @@ def render_sidebar():
                         f"{meter['last_power_reading']:.2f} W",
                         delta=None  # Could add power change if available
                     )
-                    
-                    # Meter details
-                    st.caption("Details:")
-                    details_cols = st.columns(2)
-                    with details_cols[0]:
-                        st.metric(
-                            "Total Readings",
-                            f"{meter['total_readings']:,}"
-                        )
-                    
-                    with details_cols[1]:
-                        try:
-                            # Use dateutil.parser instead of datetime.fromisoformat
-                            last_update = dateutil.parser.parse(meter['last_reading_timestamp'])
-                            time_diff = datetime.now(last_update.tzinfo) - last_update
-                            status_color = "🟢" if time_diff.seconds < 300 else "🔴"
-                            st.metric(
-                                "Last Update",
-                                f"{status_color} {last_update.strftime('%H:%M:%S')}"
-                            )
-                        except Exception as e:
-                            st.metric(
-                                "Last Update",
-                                "🔴 Error parsing time"
-                            )
-                            st.caption(f"Raw timestamp: {meter['last_reading_timestamp']}")
         else:
             st.warning("No meters connected")
             if st.button("🔄 Refresh Meters"):
