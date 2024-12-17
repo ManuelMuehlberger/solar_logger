@@ -1,6 +1,9 @@
+# src/components/sidebar.py
+
 import streamlit as st
 from datetime import datetime
 import dateutil.parser
+from utils.database import get_backend_status, get_meter_status
 
 def render_sidebar():
     """Render the persistent sidebar with backend and meter status"""

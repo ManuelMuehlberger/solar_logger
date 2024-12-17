@@ -1,7 +1,12 @@
 import streamlit as st
 from datetime import datetime
 import pytz
-from utils.database import get_current_power_usage, get_daily_stats
+from utils.database import (
+    get_current_power_usage,
+    get_daily_stats,
+    get_meter_status,
+    get_backend_status
+)
 from utils.weather import get_weather, get_daylight_info
 import plotly.graph_objects as go
 from components.sidebar import render_sidebar
