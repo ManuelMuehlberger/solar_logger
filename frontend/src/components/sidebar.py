@@ -1,8 +1,6 @@
-# src/components/sidebar.py
-
 import streamlit as st
 from datetime import datetime
-from utils.database import get_backend_status, get_meter_status
+import dateutil.parser
 
 def render_sidebar():
     """Render the persistent sidebar with backend and meter status"""
@@ -62,15 +60,21 @@ def render_sidebar():
                         )
                     
                     with details_cols[1]:
-                        last_update = datetime.fromisoformat(
-                            meter['last_reading_timestamp'].replace('Z', '+00:00')
-                        )
-                        time_diff = datetime.now(last_update.tzinfo) - last_update
-                        status_color = "🟢" if time_diff.seconds < 300 else "🔴"
-                        st.metric(
-                            "Last Update",
-                            f"{status_color} {last_update.strftime('%H:%M:%S')}"
-                        )
+                        try:
+                            # Use dateutil.parser instead of datetime.fromisoformat
+                            last_update = dateutil.parser.parse(meter['last_reading_timestamp'])
+                            time_diff = datetime.now(last_update.tzinfo) - last_update
+                            status_color = "🟢" if time_diff.seconds < 300 else "🔴"
+                            st.metric(
+                                "Last Update",
+                                f"{status_color} {last_update.strftime('%H:%M:%S')}"
+                            )
+                        except Exception as e:
+                            st.metric(
+                                "Last Update",
+                                "🔴 Error parsing time"
+                            )
+                            st.caption(f"Raw timestamp: {meter['last_reading_timestamp']}")
         else:
             st.warning("No meters connected")
             if st.button("🔄 Refresh Meters"):
