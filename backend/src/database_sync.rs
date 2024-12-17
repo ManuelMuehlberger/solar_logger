@@ -33,11 +33,11 @@ impl DatabaseSync {
         self.database_url.clone()
     }
 
-    fn f32_to_f16(value: f32) -> i16 {
+    pub fn f32_to_f16(value: f32) -> i16 {
         f16::from_f32(value).to_bits() as i16
     }
 
-    fn f16_to_f32(value: i16) -> f32 {
+    pub fn f16_to_f32(value: i16) -> f32 {
         f16::from_bits(value as u16).to_f32()
     }
 

@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pandas as pd
 from utils.database import load_data
+from utils.config import get_timezone
 from components.sidebar import render_sidebar
 
 st.set_page_config(page_title="Solar Analytics", page_icon="📊", layout="wide")
@@ -20,7 +21,9 @@ def render_time_selector():
             value="Last 24 Hours"
         )
     
-    now = datetime.utcnow()
+    local_tz = get_timezone()
+    now = datetime.now(local_tz)
+    
     if time_range == "Last Hour":
         start_time = now - timedelta(hours=1)
         end_time = now
@@ -35,22 +38,20 @@ def render_time_selector():
         end_time = now
     else:
         with col2:
-            start_time = st.date_input("Start Date", value=now - timedelta(days=7))
-            end_time = st.date_input("End Date", value=now)
-            start_time = datetime.combine(start_time, datetime.min.time())
-            end_time = datetime.combine(end_time, datetime.max.time())
+            start_date = st.date_input("Start Date", value=now.date() - timedelta(days=7))
+            end_date = st.date_input("End Date", value=now.date())
+            start_time = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=local_tz)
+            end_time = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=local_tz)
     
     return start_time, end_time
 
 def render_power_flow(df):
     st.header("Power Flow Analysis")
     
-    # Calculate net power flow
     df['net_power'] = df['export_power'] - df['import_power']
     
     fig = go.Figure()
     
-    # Add import power
     fig.add_trace(go.Scatter(
         x=df['timestamp'],
         y=df['import_power'],
@@ -59,7 +60,6 @@ def render_power_flow(df):
         line=dict(color='rgba(239, 85, 59, 0.8)')
     ))
     
-    # Add export power
     fig.add_trace(go.Scatter(
         x=df['timestamp'],
         y=df['export_power'],
@@ -115,14 +115,13 @@ def render_energy_distribution(df):
     col1, col2 = st.columns(2)
     
     with col1:
-        # Calculate daily totals
         df['date'] = df['timestamp'].dt.date
         daily_totals = df.groupby('date').agg({
             'import_power': 'sum',
             'export_power': 'sum'
         }).reset_index()
         
-        daily_totals['net_energy'] = (daily_totals['export_power'] - daily_totals['import_power']) / 3600  # Convert to kWh
+        daily_totals['net_energy'] = (daily_totals['export_power'] - daily_totals['import_power']) / 3600
         
         fig = go.Figure()
         fig.add_trace(go.Bar(
@@ -142,9 +141,8 @@ def render_energy_distribution(df):
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        # Create energy balance pie chart
-        total_import = df['import_power'].sum() / 3600  # Convert to kWh
-        total_export = df['export_power'].sum() / 3600  # Convert to kWh
+        total_import = df['import_power'].sum() / 3600
+        total_export = df['export_power'].sum() / 3600
         
         fig = go.Figure(data=[go.Pie(
             labels=['Energy Imported', 'Energy Exported'],
@@ -162,7 +160,6 @@ def render_energy_distribution(df):
 def render_comparative_analysis(df):
     st.header("Comparative Analysis")
     
-    # Get unique meters for selection
     meters = df['meter_name'].unique()
     if len(meters) > 1:
         selected_meters = st.multiselect("Select Meters to Compare", meters, default=meters)
@@ -170,7 +167,6 @@ def render_comparative_analysis(df):
     else:
         df_filtered = df
     
-    # Create comparative box plot
     fig = go.Figure()
     
     for meter in df_filtered['meter_name'].unique():
@@ -200,13 +196,11 @@ def main():
         st.warning("No data available for the selected time range")
         return
     
-    # Display analytics
     render_power_flow(df)
     render_daily_patterns(df)
     render_energy_distribution(df)
     render_comparative_analysis(df)
     
-    # Add data download option
     st.markdown("---")
     st.header("Raw Data Export")
     

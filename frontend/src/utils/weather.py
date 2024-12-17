@@ -1,18 +1,20 @@
+# utils/weather.py
 import requests
 from datetime import datetime
 import pytz
-from config import LOCATION
+from utils.config import get_config
 
 def get_weather():
     """Fetch current weather data from Open-Meteo API"""
     try:
+        config = get_config()
         # Current weather API endpoint
         url = "https://api.open-meteo.com/v1/forecast"
         params = {
-            "latitude": LOCATION["lat"],
-            "longitude": LOCATION["lon"],
+            "latitude": config.location.latitude,
+            "longitude": config.location.longitude,
             "current": ["temperature_2m", "relative_humidity_2m", "weather_code"],
-            "timezone": "auto"
+            "timezone": config.location.timezone
         }
         
         response = requests.get(url, params=params)
@@ -23,7 +25,7 @@ def get_weather():
             weather_code = data["current"]["weather_code"]
             description = get_weather_description(weather_code)
             
-            # Get sun times (using another endpoint)
+            # Get sun times
             sun_times = get_sun_times()
             
             weather_info = {
@@ -42,12 +44,13 @@ def get_weather():
 def get_sun_times():
     """Fetch sunrise and sunset times"""
     try:
+        config = get_config()
         url = "https://api.open-meteo.com/v1/forecast"
         params = {
-            "latitude": LOCATION["lat"],
-            "longitude": LOCATION["lon"],
+            "latitude": config.location.latitude,
+            "longitude": config.location.longitude,
             "daily": ["sunrise", "sunset"],
-            "timezone": "auto"
+            "timezone": config.location.timezone
         }
         
         response = requests.get(url, params=params)

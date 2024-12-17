@@ -18,6 +18,13 @@ fn default_create_database() -> bool {
     false
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum MeterType {
+    Sdm72d,
+    Mock,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct MeterConfig {
     pub name: String,
@@ -30,13 +37,6 @@ pub struct MeterConfig {
     pub meter_type: MeterType,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum MeterType {
-    Sdm72d,
-    Mock,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
     pub global: GlobalConfig,
@@ -44,13 +44,39 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let config_locations = vec![
+            String::from("./config.toml"),
+            String::from("../config.toml"),
+            String::from("/etc/solarmeter/config.toml"),
+            dirs::home_dir()
+                .map(|p| p.join("solarmeter/config.toml").to_string_lossy().into_owned())
+                .unwrap_or_else(|| String::from("~/solarmeter/config.toml")),
+        ];
+
+        let mut last_error = None;
+        
+        for path in &config_locations {
+            match Self::from_file(path) {
+                Ok(config) => return Ok(config),
+                Err(e) => {
+                    last_error = Some(e);
+                    continue;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| "No config file found".into()))
+    }
+
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
+        let path = path.as_ref();
         let contents = fs::read_to_string(path)?;
         let mut config: AppConfig = toml::from_str(&contents)?;
         
-        // Convert relative paths to absolute if necessary
+        // Convert relative database path to absolute if necessary
         if !Path::new(&config.global.database_url).is_absolute() {
-            let config_dir = Path::new(path).parent().unwrap_or(Path::new("."));
+            let config_dir = path.parent().unwrap_or(Path::new("."));
             let absolute_db_path = config_dir.join(&config.global.database_url);
             config.global.database_url = absolute_db_path.to_string_lossy().into_owned();
         }

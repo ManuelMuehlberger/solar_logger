@@ -1,42 +1,46 @@
 import sqlite3
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
+from utils.config import BACKEND_URL, DB_PATH, get_timezone
 import numpy as np
-from config import BACKEND_URL, DB_PATH
-import struct
+from datetime import timezone
 
 def float16_to_float32(int16_val: int) -> float:
     """Convert a 16-bit integer representing an f16 to a Python float."""
-    # Convert int16 to uint16 for proper bit manipulation
     uint16_val = int16_val & 0xFFFF
-    packed = struct.pack('H', uint16_val)
-    float16_val = np.frombuffer(packed, dtype=np.float16)[0]
-    return float(float16_val)
+    return float(np.frombuffer(np.array([uint16_val], dtype='uint16').tobytes(), dtype=np.float16)[0])
 
 def get_backend_status():
     try:
         response = requests.get(f"{BACKEND_URL}/status")
-        return response.json()
+        if response.status_code == 200:
+            return response.json()
     except:
-        return None
+        pass
+    return None
 
 def get_meter_status():
     try:
         response = requests.get(f"{BACKEND_URL}/meters")
-        return response.json()
+        if response.status_code == 200:
+            return response.json()
     except:
+        pass
+    return None
+
+def to_unix_timestamp(dt):
+    """Convert datetime to Unix timestamp, handling timezone-aware and naive datetimes"""
+    if dt is None:
         return None
+    if dt.tzinfo is None:
+        # If naive, assume it's in configured timezone
+        dt = dt.replace(tzinfo=get_timezone())
+    return int(dt.timestamp())
 
 def load_data(start_time=None, end_time=None, meter_name=None):
     """
     Load data from the database with optional filtering by time range and meter name.
-    Args:
-        start_time: Optional datetime for filtering data after this time
-        end_time: Optional datetime for filtering data before this time
-        meter_name: Optional string to filter data for a specific meter
-    Returns:
-        pandas.DataFrame with the requested data
     """
     conn = sqlite3.connect(DB_PATH)
     
@@ -56,12 +60,20 @@ def load_data(start_time=None, end_time=None, meter_name=None):
     params = []
     
     if start_time:
+        # Ensure start_time is in UTC
+        if start_time.tzinfo is not None:
+            start_time = start_time.astimezone(timezone.utc)
+        unix_start = int(start_time.timestamp())
         query += " AND r.timestamp >= ?"
-        params.append(int(start_time.timestamp()))
+        params.append(unix_start)
     
     if end_time:
+        # Ensure end_time is in UTC
+        if end_time.tzinfo is not None:
+            end_time = end_time.astimezone(timezone.utc)
+        unix_end = int(end_time.timestamp())
         query += " AND r.timestamp <= ?"
-        params.append(int(end_time.timestamp()))
+        params.append(unix_end)
     
     if meter_name:
         query += " AND mn.name = ?"
@@ -69,44 +81,58 @@ def load_data(start_time=None, end_time=None, meter_name=None):
     
     query += " ORDER BY r.timestamp DESC"
     
-    df = pd.read_sql_query(query, conn, params=params)
-    
-    # Convert timestamp from Unix timestamp to datetime
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-    
-    # Convert f16 power readings to f32
-    for col in ['total_power', 'import_power', 'export_power']:
-        df[col] = df[col].apply(float16_to_float32)
-    
-    conn.close()
-    return df
+    try:
+        df = pd.read_sql_query(query, conn, params=params)
+        
+        if not df.empty:
+            # First convert Unix timestamps to UTC datetime
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
+            
+            # Now convert to configured timezone
+            configured_tz = get_timezone()
+            df['timestamp'] = df['timestamp'].dt.tz_convert(configured_tz)
+            
+            # Convert f16 stored power values to f32
+            for col in ['total_power', 'import_power', 'export_power']:
+                df[col] = df[col].apply(float16_to_float32)
+        
+        return df
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        return pd.DataFrame()
+    finally:
+        conn.close()
 
 def get_current_power_usage():
+    """Get the current total power usage across all meters"""
     meters = get_meter_status()
     if not meters:
-        return 0
-    total_power = sum(meter['last_power_reading'] for meter in meters if meter['last_power_reading'])
-    return abs(total_power)  # Use abs() since power might be negative for export
+        return 0.0
+    try:
+        return abs(sum(float(meter.get('last_power_reading', 0)) for meter in meters))
+    except:
+        return 0.0
 
 def get_daily_stats():
-    today = datetime.now().date()
-    start_time = datetime.combine(today, datetime.min.time())
-    df = load_data(start_time)
+    """Calculate daily statistics for power usage"""
+    configured_tz = get_timezone()
+    today = datetime.now(configured_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    df = load_data(start_time=today)
     
     if df.empty:
         return {
-            'total_import': 0,
-            'total_export': 0,
-            'peak_power': 0,
-            'average_power': 0
+            'total_import': 0.0,
+            'total_export': 0.0,
+            'peak_power': 0.0,
+            'average_power': 0.0
         }
     
     # Calculate time differences for energy calculation
     df['time_diff'] = df['timestamp'].diff(-1).dt.total_seconds().abs() / 3600  # Convert to hours
     
     stats = {
-        'total_import': (df['import_power'] * df['time_diff']).sum() / 1000,  # Convert W to kWh
-        'total_export': (df['export_power'] * df['time_diff']).sum() / 1000,  # Convert W to kWh
+        'total_import': (df['import_power'] * df['time_diff']).sum() / 1000,  # Convert Wh to kWh
+        'total_export': (df['export_power'] * df['time_diff']).sum() / 1000,  # Convert Wh to kWh
         'peak_power': df['total_power'].abs().max(),
         'average_power': df['total_power'].mean()
     }

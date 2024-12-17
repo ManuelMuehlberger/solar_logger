@@ -106,24 +106,12 @@ async fn handle_meter(
     }
 }
 
-async fn health_check(port: u16) {
-    use warp::Filter;
-    
-    let health = warp::path!("health")
-        .map(|| "OK");
-    
-    info!("Starting health check endpoint on port {}", port);
-    warp::serve(health)
-        .run(([127, 0, 0, 1], port))
-        .await;
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     initialize_logging("~/log/solar_meter")?;
     info!("Starting solar meter monitoring system");
 
-    let config = match AppConfig::from_file("src/config.toml") {
+    let config = match AppConfig::load() {
         Ok(config) => config,
         Err(e) => {
             error!("Failed to load configuration: {}", e);

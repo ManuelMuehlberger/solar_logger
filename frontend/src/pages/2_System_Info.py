@@ -1,10 +1,7 @@
-# pages/2_System_Info.py
-
 import streamlit as st
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pandas as pd
-import dateutil.parser
 from utils.database import get_backend_status, get_meter_status, load_data
 from components.sidebar import render_sidebar
 
@@ -18,15 +15,30 @@ st.set_page_config(
 # Render the persistent sidebar
 render_sidebar()
 
-def safe_parse_timestamp(timestamp_str):
-    """Safely parse a timestamp string using dateutil.parser"""
+def format_timestamp(timestamp):
+    """Convert Unix timestamp to formatted datetime string"""
     try:
-        return dateutil.parser.parse(timestamp_str)
+        if timestamp is None:
+            return None
+            
+        # If timestamp is a string that looks like a number, convert it
+        if isinstance(timestamp, str):
+            try:
+                timestamp = int(float(timestamp))
+            except ValueError:
+                return None
+                
+        # Convert Unix timestamp to datetime
+        if isinstance(timestamp, (int, float)):
+            return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+            
+        return None
     except Exception as e:
-        st.error(f"Failed to parse timestamp: {timestamp_str}")
+        print(f"Error formatting timestamp {timestamp}: {e}")
         return None
 
 def render_system_overview():
+    """Render the system overview section"""
     st.title("ℹ️ System Information")
     
     try:
@@ -41,13 +53,13 @@ def render_system_overview():
         with col1:
             st.metric(
                 "Database Size",
-                f"{status['database_size_bytes'] / 1024 / 1024:.2f} MB",
+                f"{status.get('database_size_bytes', 0) / 1024 / 1024:.2f} MB",
             )
         
         with col2:
             st.metric(
                 "Total Records",
-                f"{status['total_records']:,}",
+                f"{status.get('total_records', 0):,}",
             )
         
         with col3:
@@ -66,6 +78,7 @@ def render_system_overview():
         st.error(f"Error rendering system overview: {str(e)}")
 
 def render_meter_details():
+    """Render the meter details section"""
     st.header("Meter Details")
     
     try:
@@ -74,43 +87,59 @@ def render_meter_details():
             st.warning("No meter information available")
             return
         
-        # Create expandable sections for each meter
         for meter in meters:
             with st.expander(f"📊 {meter['meter_name']}", expanded=True):
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
+                    last_power = meter.get('last_power_reading', 0)
+                    if isinstance(last_power, str):
+                        try:
+                            last_power = float(last_power)
+                        except ValueError:
+                            last_power = 0
                     st.metric(
                         "Current Power",
-                        f"{meter['last_power_reading']:.2f} W"
+                        f"{last_power:.2f} W"
                     )
                 
                 with col2:
                     st.metric(
                         "Total Readings",
-                        f"{meter['total_readings']:,}"
+                        f"{meter.get('total_readings', 0):,}"
                     )
                 
                 with col3:
-                    last_update = safe_parse_timestamp(meter['last_reading_timestamp'])
-                    if last_update:
-                        time_diff = datetime.now(last_update.tzinfo) - last_update
-                        status_color = "🟢" if time_diff.seconds < 300 else "🔴"
-                        st.metric(
-                            "Last Update",
-                            f"{status_color} {last_update.strftime('%H:%M:%S')}"
-                        )
+                    # Debug timestamp value
+                    raw_timestamp = meter.get('last_reading_timestamp')
+                    st.caption(f"Debug - Raw timestamp: {raw_timestamp}")
+                    
+                    last_reading = format_timestamp(raw_timestamp)
+                    if last_reading:
+                        try:
+                            last_time = datetime.strptime(last_reading, '%Y-%m-%d %H:%M:%S')
+                            time_diff = datetime.now() - last_time
+                            status_color = "🟢" if time_diff.seconds < 300 else "🔴"
+                            st.metric(
+                                "Last Update",
+                                f"{status_color} {last_reading}"
+                            )
+                        except Exception as e:
+                            st.metric(
+                                "Last Update",
+                                "🔴 Error parsing time"
+                            )
+                            st.caption(f"Debug - Error: {str(e)}")
                     else:
                         st.metric(
                             "Last Update",
-                            "🔴 Invalid timestamp"
+                            "🔴 No data"
                         )
                 
-                # Add meter-specific analytics
                 try:
                     df = load_data(
-                        datetime.utcnow() - timedelta(hours=24),
-                        datetime.utcnow(),
+                        datetime.now() - timedelta(hours=24),
+                        datetime.now(),
                         meter['meter_name']
                     )
                     
@@ -121,7 +150,7 @@ def render_meter_details():
                             # Power stability gauge
                             power_std = df['total_power'].std()
                             max_power = df['total_power'].max()
-                            stability = max(0, min(100, 100 * (1 - power_std / max_power)))
+                            stability = max(0, min(100, 100 * (1 - power_std / max_power if max_power != 0 else 1)))
                             
                             fig = go.Figure(go.Indicator(
                                 mode = "gauge+number",
@@ -142,7 +171,6 @@ def render_meter_details():
                                     }
                                 }
                             ))
-                            
                             st.plotly_chart(fig, use_container_width=True)
                         
                         with col2:
@@ -150,7 +178,7 @@ def render_meter_details():
                             df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
                             avg_interval = df['time_diff'].mean()
                             expected_interval = 60  # assuming 1-minute intervals
-                            reliability = min(100, 100 * (expected_interval / avg_interval))
+                            reliability = min(100, 100 * (expected_interval / avg_interval if avg_interval != 0 else 1))
                             
                             fig = go.Figure(go.Indicator(
                                 mode = "gauge+number",
@@ -171,7 +199,6 @@ def render_meter_details():
                                     }
                                 }
                             ))
-                            
                             st.plotly_chart(fig, use_container_width=True)
                     else:
                         st.info("No data available for the last 24 hours")
@@ -181,13 +208,13 @@ def render_meter_details():
         st.error(f"Error rendering meter details: {str(e)}")
 
 def render_database_stats():
+    """Render the database statistics section"""
     st.header("Database Statistics")
     
     try:
-        # Load last 30 days of data for analysis
         df = load_data(
-            datetime.utcnow() - timedelta(days=30),
-            datetime.utcnow()
+            datetime.now() - timedelta(days=30),
+            datetime.now()
         )
         
         if df.empty:
