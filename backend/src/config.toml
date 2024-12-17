@@ -1,6 +1,7 @@
 [global]
 database_url = "/home/manu/solarmeter/db/solar_db.db"
 create_database = true
+web_server_port = 8081
 
 [meters.SDM72D_1]
 name = "SDM72D_M_1"

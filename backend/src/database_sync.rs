@@ -18,9 +18,19 @@ pub struct Model {
 
 pub struct DatabaseSync {
     conn: Mutex<Connection>,
+    database_url: String,
 }
 
 impl DatabaseSync {
+
+    pub fn get_connection(&self) -> Result<std::sync::MutexGuard<Connection>, Box<dyn std::error::Error>> {
+        Ok(self.conn.lock().map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?)
+    }
+
+    pub fn get_database_path(&self) -> String {
+        self.database_url.clone()
+    }
+
     pub fn new(database_url: &str, create_database: bool) -> Result<Self, Box<dyn std::error::Error>> {
         if let Some(parent) = Path::new(database_url).parent() {
             fs::create_dir_all(parent)?;
@@ -50,7 +60,10 @@ impl DatabaseSync {
             )?;
         }
 
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self { 
+            conn: Mutex::new(conn),
+            database_url: database_url.to_string(),
+        })
     }
 
     pub fn insert_meter_reading(&self, reading: &Model) -> Result<(), Box<dyn std::error::Error>> {

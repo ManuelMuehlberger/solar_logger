@@ -2,6 +2,7 @@ use solarmeter::{
     config::AppConfig,
     database_sync::DatabaseSync,
     meters::{create_meter, MeterReader},
+    web_server::WebServer
 };
 use log::{error, info, LevelFilter};
 
@@ -139,9 +140,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     info!("Database initialized at {}", config.global.database_url);
+  
+    let web_server = WebServer::new(Arc::clone(&db_sync));
+    let web_server_port = config.global.web_server_port.unwrap_or(8080);
+    task::spawn(web_server.run(web_server_port));
 
-    let health_check_port = config.global.health_check_port.unwrap_or(8080);
-    task::spawn(health_check(health_check_port));
 
     let mut meter_tasks = Vec::new();
     for (meter_id, meter_config) in &config.meters {
