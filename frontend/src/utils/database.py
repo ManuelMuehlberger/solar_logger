@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import requests
 from utils.config import BACKEND_URL, DB_PATH, get_timezone
+import streamlit as st
 import numpy as np
 from datetime import timezone
 
@@ -38,6 +39,7 @@ def to_unix_timestamp(dt):
         dt = dt.replace(tzinfo=get_timezone())
     return int(dt.timestamp())
 
+@st.cache_data(ttl=60)
 def load_data(start_time=None, end_time=None, meter_name=None):
     """
     Load data from the database with optional filtering by time range and meter name.
@@ -103,6 +105,7 @@ def load_data(start_time=None, end_time=None, meter_name=None):
     finally:
         conn.close()
 
+@st.cache_data(ttl=60)
 def get_current_power_usage():
     """Get the current total power usage across all meters"""
     meters = get_meter_status()
@@ -113,6 +116,7 @@ def get_current_power_usage():
     except:
         return 0.0
 
+@st.cache_data(ttl=60)
 def get_daily_stats():
     """Calculate daily statistics for power usage"""
     configured_tz = get_timezone()

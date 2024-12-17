@@ -1,9 +1,11 @@
 # utils/weather.py
 import requests
 from datetime import datetime
+import streamlit as st
 import pytz
 from utils.config import get_config
 
+@st.cache_data(ttl=720)
 def get_weather():
     """Fetch current weather data from Open-Meteo API"""
     try:

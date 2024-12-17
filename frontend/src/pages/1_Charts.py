@@ -1,29 +1,61 @@
 import streamlit as st
-import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pandas as pd
+import numpy as np
 from utils.database import load_data
 from utils.config import get_timezone
 from components.sidebar import render_sidebar
 
-st.set_page_config(page_title="Solar Analytics", page_icon="📊", layout="wide")
 
 render_sidebar()
 
+@st.cache_data(ttl=120)
+def prepare_power_flow_data(df):
+    """Prepare and downsample data for power flow chart"""
+    # Ensure numeric columns
+    numeric_columns = ['import_power', 'export_power', 'total_power']
+    df_clean = df.copy()
+    
+    # Convert to numeric, replacing errors with NaN
+    for col in numeric_columns:
+        df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+    
+    # Drop rows with NaN values
+    df_clean = df_clean.dropna(subset=numeric_columns)
+    
+    # Downsample data to 2-minute intervals
+    df_resampled = (df_clean.set_index('timestamp')
+                   .resample('1min')
+                   .agg({
+                       'import_power': 'mean',
+                       'export_power': 'mean',
+                       'total_power': 'mean'
+                   })
+                   .reset_index())
+    
+    return df_resampled
+
 def render_time_selector():
+    """Render time range selector with optimized state management"""
+    # Initialize session state for time range if not exists
+    if 'time_range' not in st.session_state:
+        st.session_state.time_range = "Last 24 Hours"
+    
     col1, col2 = st.columns([3, 1])
     
     with col1:
         time_range = st.select_slider(
             "Select Time Range",
             options=["Last Hour", "Last 24 Hours", "Last 7 Days", "Last 30 Days", "Custom"],
-            value="Last 24 Hours"
+            value=st.session_state.time_range,
+            key='time_range_slider'
         )
     
     local_tz = get_timezone()
     now = datetime.now(local_tz)
     
+    # Calculate time range based on selection
     if time_range == "Last Hour":
         start_time = now - timedelta(hours=1)
         end_time = now
@@ -36,182 +68,174 @@ def render_time_selector():
     elif time_range == "Last 30 Days":
         start_time = now - timedelta(days=30)
         end_time = now
-    else:
+    else:  # Custom range
         with col2:
-            start_date = st.date_input("Start Date", value=now.date() - timedelta(days=7))
-            end_date = st.date_input("End Date", value=now.date())
+            start_date = st.date_input(
+                "Start Date",
+                value=now.date() - timedelta(days=7),
+                key='custom_start_date'
+            )
+            end_date = st.date_input(
+                "End Date",
+                value=now.date(),
+                key='custom_end_date'
+            )
             start_time = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=local_tz)
             end_time = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=local_tz)
     
+    # Update session state
+    st.session_state.time_range = time_range
+    
     return start_time, end_time
 
+@st.cache_data(ttl=120)
+def prepare_daily_patterns(df):
+    """Prepare data for daily patterns chart"""
+    df_clean = df.copy()
+    
+    # Convert to numeric
+    df_clean['total_power'] = pd.to_numeric(df_clean['total_power'], errors='coerce')
+    df_clean['hour'] = df_clean['timestamp'].dt.hour
+    
+    # Calculate hourly averages
+    hourly_avg = (df_clean.groupby(['meter_name', 'hour'])['total_power']
+                 .mean()
+                 .reset_index())
+    
+    return hourly_avg
+
 def render_power_flow(df):
+    """Render power flow chart with optimized data"""
     st.header("Power Flow Analysis")
     
-    df['net_power'] = df['export_power'] - df['import_power']
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=df['timestamp'],
-        y=df['import_power'],
-        name='Import Power',
-        fill='tozeroy',
-        line=dict(color='rgba(239, 85, 59, 0.8)')
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=df['timestamp'],
-        y=df['export_power'],
-        name='Export Power',
-        fill='tozeroy',
-        line=dict(color='rgba(99, 110, 250, 0.8)')
-    ))
-    
-    fig.update_layout(
-        title="Power Flow Over Time",
-        xaxis_title="Time",
-        yaxis_title="Power (W)",
-        hovermode='x unified',
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_daily_patterns(df):
-    st.header("Daily Power Patterns")
-    
-    df['hour'] = df['timestamp'].dt.hour
-    hourly_avg = df.groupby(['meter_name', 'hour']).agg({
-        'total_power': 'mean',
-        'import_power': 'mean',
-        'export_power': 'mean'
-    }).reset_index()
-    
-    fig = go.Figure()
-    
-    for meter in df['meter_name'].unique():
-        meter_data = hourly_avg[hourly_avg['meter_name'] == meter]
-        fig.add_trace(go.Scatter(
-            x=meter_data['hour'],
-            y=meter_data['total_power'],
-            name=f"{meter} - Total Power",
-            mode='lines+markers'
-        ))
-    
-    fig.update_layout(
-        title="Average Power by Hour of Day",
-        xaxis_title="Hour",
-        yaxis_title="Average Power (W)",
-        xaxis=dict(tickmode='linear', tick0=0, dtick=1),
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_energy_distribution(df):
-    st.header("Energy Distribution")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        df['date'] = df['timestamp'].dt.date
-        daily_totals = df.groupby('date').agg({
-            'import_power': 'sum',
-            'export_power': 'sum'
-        }).reset_index()
-        
-        daily_totals['net_energy'] = (daily_totals['export_power'] - daily_totals['import_power']) / 3600
+    try:
+        df_plot = prepare_power_flow_data(df)
         
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=daily_totals['date'],
-            y=daily_totals['net_energy'],
-            name='Net Energy',
-            marker_color=daily_totals['net_energy'].apply(
-                lambda x: 'rgba(99, 110, 250, 0.8)' if x >= 0 else 'rgba(239, 85, 59, 0.8)'
+        
+        # Efficient trace creation
+        traces = [
+            go.Scatter(
+                x=df_plot['timestamp'],
+                y=df_plot['import_power'],
+                name='Import Power',
+                fill='tozeroy',
+                line=dict(color='rgba(239, 85, 59, 0.8)'),
+                hovertemplate='%{y:.1f} W<extra></extra>'
+            ),
+            go.Scatter(
+                x=df_plot['timestamp'],
+                y=df_plot['export_power'],
+                name='Export Power',
+                fill='tozeroy',
+                line=dict(color='rgba(99, 110, 250, 0.8)'),
+                hovertemplate='%{y:.1f} W<extra></extra>'
             )
-        ))
+        ]
         
+        fig.add_traces(traces)
+        
+        # Optimized layout
         fig.update_layout(
-            title="Daily Net Energy (kWh)",
-            height=400
+            title="Power Flow Over Time",
+            xaxis_title="Time",
+            yaxis_title="Power (W)",
+            hovermode='x unified',
+            height=400,
+            showlegend=True,
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            ),
+            # Improve rendering performance
+            uirevision='constant',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=50, r=20, t=40, b=50)
         )
         
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        total_import = df['import_power'].sum() / 3600
-        total_export = df['export_power'].sum() / 3600
+        # Optimized config
+        config = {
+            'displayModeBar': False,
+            'responsive': True,
+            'staticPlot': False,
+            'scrollZoom': False
+        }
         
-        fig = go.Figure(data=[go.Pie(
-            labels=['Energy Imported', 'Energy Exported'],
-            values=[total_import, total_export],
-            hole=.3
-        )])
-        
-        fig.update_layout(
-            title="Energy Balance Distribution",
-            height=400
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+        placeholder = st.empty()
+        with placeholder.container():
+            st.plotly_chart(fig, use_container_width=True, config=config)
+            
+    except Exception as e:
+        st.error(f"Error rendering power flow chart: {str(e)}")
 
-def render_comparative_analysis(df):
-    st.header("Comparative Analysis")
+def render_daily_patterns(df):
+    """Render daily patterns chart with optimized data"""
+    st.header("Daily Power Patterns")
     
-    meters = df['meter_name'].unique()
-    if len(meters) > 1:
-        selected_meters = st.multiselect("Select Meters to Compare", meters, default=meters)
-        df_filtered = df[df['meter_name'].isin(selected_meters)]
-    else:
-        df_filtered = df
-    
-    fig = go.Figure()
-    
-    for meter in df_filtered['meter_name'].unique():
-        meter_data = df_filtered[df_filtered['meter_name'] == meter]
+    try:
+        hourly_avg = prepare_daily_patterns(df)
         
-        fig.add_trace(go.Box(
-            y=meter_data['total_power'],
-            name=meter,
-            boxpoints='outliers'
-        ))
-    
-    fig.update_layout(
-        title="Power Distribution by Meter",
-        yaxis_title="Power (W)",
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+        fig = go.Figure()
+        
+        for meter in hourly_avg['meter_name'].unique():
+            meter_data = hourly_avg[hourly_avg['meter_name'] == meter]
+            fig.add_trace(go.Scatter(
+                x=meter_data['hour'],
+                y=meter_data['total_power'],
+                name=f"{meter}",
+                mode='lines+markers'
+            ))
+        
+        fig.update_layout(
+            title="Average Power by Hour of Day",
+            xaxis_title="Hour",
+            yaxis_title="Average Power (W)",
+            xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+            height=400,
+            uirevision='constant'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+    except Exception as e:
+        st.error(f"Error rendering daily patterns chart: {str(e)}")
 
 def main():
     st.title("📊 Solar Power Analytics")
     
+    # Use session state to avoid unnecessary reloading
+    if 'start_time' not in st.session_state:
+        st.session_state.start_time = datetime.now(get_timezone()) - timedelta(days=1)
+    if 'end_time' not in st.session_state:
+        st.session_state.end_time = datetime.now(get_timezone())
+    
     start_time, end_time = render_time_selector()
-    df = load_data(start_time, end_time)
+    
+    # Only reload data if time range changed
+    if (start_time != st.session_state.start_time or 
+        end_time != st.session_state.end_time):
+        st.session_state.start_time = start_time
+        st.session_state.end_time = end_time
+        st.session_state.df = load_data(start_time, end_time)
+    
+    df = st.session_state.df
     
     if df.empty:
         st.warning("No data available for the selected time range")
         return
     
-    render_power_flow(df)
-    render_daily_patterns(df)
-    render_energy_distribution(df)
-    render_comparative_analysis(df)
+    # Create placeholder containers
+    flow_container = st.empty()
+    patterns_container = st.empty()
     
-    st.markdown("---")
-    st.header("Raw Data Export")
-    
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        "Download Data as CSV",
-        csv,
-        "solar_data.csv",
-        "text/csv",
-        key='download-csv'
-    )
+    # Render charts in containers
+    with flow_container:
+        render_power_flow(df)
+    with patterns_container:
+        render_daily_patterns(df)
 
 if __name__ == "__main__":
     main()

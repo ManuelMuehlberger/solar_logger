@@ -1,6 +1,9 @@
 # Rust build directory
 /backend/target/
 
+# Python stuff
+/frontend/.venv
+
 # SQLite database files
 /db/*.db
 /db/*.sqlite

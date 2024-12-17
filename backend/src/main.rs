@@ -2,7 +2,8 @@ use solarmeter::{
     config::AppConfig,
     database_sync::DatabaseSync,
     meters::{create_meter, MeterReader},
-    web_server::WebServer
+    web_server::WebServer,
+    data_retention::RetentionService,
 };
 use log::{error, info, LevelFilter};
 
@@ -139,6 +140,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let web_server_port = config.global.web_server_port.unwrap_or(8080);
     task::spawn(web_server.run(web_server_port));
+
+    let retention_db = Arc::clone(&db_sync);
+    task::spawn(async move {
+        let retention_service = RetentionService::new(retention_db);
+        retention_service.run().await;
+    });
 
     let mut meter_tasks = Vec::new();
     for (meter_id, meter_config) in &config.meters {
