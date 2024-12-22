@@ -1,6 +1,11 @@
+// In meters/mod.rs
 use async_trait::async_trait;
-use anyhow::{Result, Error};
+use anyhow::Error;
 use std::time::Duration;
+use tokio::sync::Mutex;
+use std::sync::Arc;
+use tokio_modbus::client::Context;
+use std::collections::HashMap;
 use crate::database_sync::Model;
 
 mod mock_meter;
@@ -16,7 +21,41 @@ pub trait MeterReader: Send {
     fn get_polling_rate(&self) -> u32;
 }
 
-pub fn create_meter(
+pub struct SharedSerial {
+    ctx: Mutex<Option<Context>>,
+    port: String,
+    baud_rate: u32,
+    timeout: u32,
+}
+
+impl SharedSerial {
+    pub fn new(port: String, baud_rate: u32, timeout: u32) -> Arc<Self> {
+        Arc::new(Self {
+            ctx: Mutex::new(None),
+            port,
+            baud_rate,
+            timeout,
+        })
+    }
+}
+
+// Global storage for shared serial connections
+lazy_static::lazy_static! {
+    static ref SHARED_SERIALS: Mutex<HashMap<String, Arc<SharedSerial>>> = Mutex::new(HashMap::new());
+}
+
+pub async fn get_or_create_shared_serial(port: String, baud_rate: u32, timeout: u32) -> Arc<SharedSerial> {
+    let mut serials = SHARED_SERIALS.lock().await;
+    if let Some(serial) = serials.get(&port) {
+        Arc::clone(serial)
+    } else {
+        let serial = SharedSerial::new(port.clone(), baud_rate, timeout);
+        serials.insert(port, Arc::clone(&serial));
+        serial
+    }
+}
+
+pub async fn create_meter(
     name: String,
     meter_type: crate::config::MeterType,
     port: String,
@@ -27,19 +66,16 @@ pub fn create_meter(
 ) -> Box<dyn MeterReader> {
     match meter_type {
         crate::config::MeterType::Sdm72d => {
+            let shared_serial = get_or_create_shared_serial(port, baud_rate, timeout).await;
             Box::new(SDM72DMeter::new(
                 name,
-                port,
-                baud_rate,
+                shared_serial,
                 modbus_address,
-                timeout,
                 polling_rate
             ))
         }
         crate::config::MeterType::Mock => {
-            Box::new(MockMeter::new(
-            name,
-        ))
-    }
+            Box::new(MockMeter::new(name))
+        }
     }
 }

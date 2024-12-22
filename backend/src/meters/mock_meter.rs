@@ -1,8 +1,11 @@
+// In meters/mock_meter.rs
+
 use async_trait::async_trait;
 use super::MeterReader;
 use crate::database_sync::Model;
 use chrono::Utc;
 use std::time::Duration;
+use anyhow::Result;
 
 pub struct MockMeter {
     name: String,
@@ -25,7 +28,8 @@ impl MeterReader for MockMeter {
     fn get_polling_rate(&self) -> u32 {
         10
     }
-    async fn get_value(&mut self) -> anyhow::Result<Model> {
+
+    async fn get_value(&mut self) -> Result<Model> {
         let now = Utc::now();
         let total_power = (now.timestamp() as f32 / 3600.0).sin() * 1000.0;
         
@@ -36,7 +40,6 @@ impl MeterReader for MockMeter {
         self.last_update = Some(now);
 
         Ok(Model {
-            //id: 0,
             meter_name: self.name.clone(),
             timestamp: now,
             total_power,

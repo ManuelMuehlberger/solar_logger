@@ -159,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             meter_config.polling_rate,
             meter_config.modbus_address,
             meter_config.timeout,
-        );
+        ).await;  // Note the .await here
 
         let db_sync = Arc::clone(&db_sync);
         let polling_rate = meter.get_polling_rate();

@@ -5,19 +5,47 @@ web_server_port = 8081
 bind_address = "0.0.0.0"
 
 [location]
-city = "Berlin"
+city = "Munich"
 timezone = "Europe/Berlin"
 latitude = 48.1351
 longitude = 11.5820
 
 [meters.SDM72D_1]
-name = "SDM72D_M_1"
+name = "Obergeschoss"
 port = "/dev/ttyACM0"
 baud_rate = 9600
 timeout = 10
-polling_rate = 5
+polling_rate = 10
 type = "sdm72d"
 modbus_address = 1
+
+[meters.SDM72D_2]
+name = "Photovoltaik"
+port = "/dev/ttyACM0"
+baud_rate = 9600
+timeout = 10
+polling_rate = 10
+type = "sdm72d"
+modbus_address = 2
+
+[meters.SDM72D_3]
+name = "Wallbox"
+port = "/dev/ttyACM0"
+baud_rate = 9600
+timeout = 10
+polling_rate = 10
+type = "sdm72d"
+modbus_address = 3
+
+[meters.SDM72D_4]
+name = "Wärmepumpe"
+port = "/dev/ttyACM0"
+baud_rate = 9600
+timeout = 10
+polling_rate = 10
+type = "sdm72d"
+modbus_address = 4
+
 
 #[meters.SDM72D_2]
 #name = "SDM72D_M_2"
