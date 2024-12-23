@@ -3,6 +3,7 @@ database_url = "/home/manu/solarmeter/db/solar_db.db"
 create_database = true
 web_server_port = 8081
 bind_address = "0.0.0.0"
+log_level = "warn"  # Can be error, warn, info, debug, or trace
 
 [location]
 city = "Munich"

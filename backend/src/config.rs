@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use log::LevelFilter;
+use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 pub struct GlobalConfig {
@@ -9,13 +11,46 @@ pub struct GlobalConfig {
     #[serde(default = "default_create_database")]
     pub create_database: bool,
     pub health_check_port: Option<u16>,
-    pub log_level: Option<String>,
+    #[serde(default = "default_log_level")]
+    pub log_level: LogLevel,
+    #[serde(default = "default_log_dir")]
+    pub log_dir: String,
     pub web_server_port: Option<u16>,
     pub bind_address: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl LogLevel {
+    pub fn to_level_filter(&self) -> LevelFilter {
+        match self {
+            LogLevel::Error => LevelFilter::Error,
+            LogLevel::Warn => LevelFilter::Warn,
+            LogLevel::Info => LevelFilter::Info,
+            LogLevel::Debug => LevelFilter::Debug,
+            LogLevel::Trace => LevelFilter::Trace,
+        }
+    }
+}
+
+fn default_log_level() -> LogLevel {
+    LogLevel::Info
+}
+
 fn default_create_database() -> bool {
     false
+}
+
+fn default_log_dir() -> String {
+    String::from("~/log/solar_meter")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
