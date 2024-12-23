@@ -1,38 +1,42 @@
-use dioxus::prelude::*;
-use dioxus_web::Config;
+use axum::{
+    routing::get,
+    Router,
+};
+use std::net::SocketAddr;
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod components;
 mod pages;
 mod utils;
 
-fn main() {
-    // Initialize logging for development
-    wasm_logger::init(wasm_logger::Config::default());
-    
-    let config = Config::default();
-    launch(app);
+#[tokio::main]
+async fn main() {
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    // Build our application with routes
+    let app = Router::new()
+        // API routes
+        .nest("/api", api_router())
+        // Page routes
+        .merge(pages::router())
+        .layer(TraceLayer::new_for_http());
+
+    // Run our application
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    tracing::info!("listening on {}", addr);
+    axum::serve(tokio::net::TcpListener::bind(&addr).await.unwrap(), app).await.unwrap();
 }
 
-fn app() -> Element {
-    rsx! {
-        // Global styles - load directly in index.html instead
-        div {
-            class: "app-container",
-            
-            // We'll add these components back once they're implemented
-            // components::header::Header {}
-            
-            div {
-                class: "main-content",
-                
-                // components::sidebar::Sidebar {}
-                
-                div {
-                    class: "content",
-                    // pages::home::HomePage {}
-                    "Hello World!" // Temporary placeholder
-                }
-            }
-        }
-    }
+fn api_router() -> Router {
+    Router::new()
+        .route("/status", get(utils::api::get_status))
+        .route("/meters", get(utils::api::get_meters))
+        .route("/weather", get(utils::api::get_weather))
 }
