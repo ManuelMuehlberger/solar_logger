@@ -32,7 +32,7 @@ const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024;
 const LOG_FILES_COUNT: u32 = 5;
 const LOG_PATTERN: &str = "{d(%Y-%m-%d %H:%M:%S)} [{l}] {m}{n}";
 
-fn initialize_logging(log_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn initialize_logging(log_dir: &str, log_level: LevelFilter) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(log_dir)?;
     let log_path = PathBuf::from(log_dir);
 
@@ -62,7 +62,7 @@ fn initialize_logging(log_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
         .build(Root::builder()
             .appender("stdout")
             .appender("main_log")
-            .build(LevelFilter::Info))?;
+            .build(log_level))?;
 
     log4rs::init_config(config)?;
     Ok(())
@@ -73,44 +73,63 @@ async fn handle_meter(
     db_sync: Arc<DatabaseSync>,
     polling_rate: u32,
 ) {
+    // Log initial meter setup
     let meter_name = match meter.get_value().await {
         Ok(reading) => reading.meter_name.clone(),
-        Err(_) => "Unknown Meter".to_string(),
+        Err(e) => {
+            error!("Failed to get initial reading from meter: {}", e);
+            "Unknown Meter".to_string()
+        }
     };
 
     info!("Started polling loop for meter: {}", meter_name);
     let polling_duration = Duration::from_secs(polling_rate.into());
 
     loop {
-        match meter.get_value().await {
+        // Get reading from meter
+        let reading_result = meter.get_value().await;
+        
+        match reading_result {
             Ok(reading) => {
+                // Log the successful meter reading
+                info!(
+                    "Got reading from {}: Power: {:.2}W, Import: {:.2}W, Export: {:.2}W, Total: {:.2}kWh",
+                    reading.meter_name, reading.total_power, reading.import_power,
+                    reading.export_power, reading.total_kwh
+                );
+                
+                // Store reading in database
                 match db_sync.insert_meter_reading(&reading) {
                     Ok(_) => {
                         info!(
-                            "Reading from {}: Power: {:.2}W, Import: {:.2}W, Export: {:.2}W, Total: {:.2}kWh",
-                            reading.meter_name, reading.total_power, reading.import_power,
-                            reading.export_power, reading.total_kwh
+                            "Successfully stored reading from {}",
+                            reading.meter_name
                         );
                     }
                     Err(e) => {
-                        error!("Failed to insert reading for {}: {}", reading.meter_name, e);
+                        error!(
+                            "Failed to insert reading for {}: {}",
+                            reading.meter_name,
+                            e
+                        );
                     }
                 }
             }
             Err(e) => {
                 error!("Failed to read meter {}: {}", meter_name, e);
+                // On error, wait 30 seconds before retrying to avoid spamming logs
                 sleep(Duration::from_secs(30)).await;
+                continue; // Skip the normal polling delay and retry immediately after error timeout
             }
         }
 
+        // Wait for the next polling interval
         sleep(polling_duration).await;
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    initialize_logging("~/log/solar_meter")?;
-    info!("Starting solar meter monitoring system");
 
     let config = match AppConfig::load() {
         Ok(config) => config,
@@ -119,6 +138,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(e);
         }
     };
+    // Expand the tilde in the log directory path if it exists
+    let log_dir = if config.global.log_dir.starts_with("~/") {
+        let home = dirs::home_dir()
+            .ok_or_else(|| "Could not determine home directory")?;
+        home.join(&config.global.log_dir[2..]).to_string_lossy().into_owned()
+    } else {
+        config.global.log_dir.clone()
+    };
+
+    initialize_logging(&log_dir, config.global.log_level.to_level_filter())?;
+    info!("Starting solar meter monitoring system");
+
     info!("Configuration loaded successfully");
 
     let db_sync = Arc::new(match DatabaseSync::new(&config.global.database_url, config.global.create_database) {
