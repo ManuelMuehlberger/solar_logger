@@ -1,0 +1,111 @@
+/* Main theme colors */
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #2ecc71;
+    --accent-color: #f1c40f;
+    --background-color: #f8f9fa;
+    --card-background: #ffffff;
+    --text-color: #2c3e50;
+    --text-light: #7f8c8d;
+    --shadow: rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Overall app styling */
+  .main {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  
+  /* Header styling */
+  h1, h2, h3 {
+    font-weight: 600 !important;
+  }
+  
+  h1 {
+    font-size: 2.5rem !important;
+    margin-bottom: 1rem !important;
+  }
+  
+  .stTitle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+  
+  /* Card styling for metrics */
+  div.stMetric {
+    background-color: var(--card-background);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px var(--shadow);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  div.stMetric:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px var(--shadow);
+  }
+  
+  /* Button styling */
+  button {
+    border-radius: 8px !important;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.2s !important;
+  }
+  
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--shadow);
+  }
+  
+  /* Sidebar styling */
+  .sidebar .sidebar-content {
+    background-color: var(--card-background);
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Chart improvements */
+  .js-plotly-plot {
+    border-radius: 10px;
+    box-shadow: 0 4px 6px var(--shadow);
+    padding: 1rem;
+    background-color: var(--card-background);
+  }
+  
+  /* Status indicators */
+  .status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+  }
+  
+  .status-online {
+    background-color: var(--secondary-color);
+  }
+  
+  .status-offline {
+    background-color: #e74c3c;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+  }
